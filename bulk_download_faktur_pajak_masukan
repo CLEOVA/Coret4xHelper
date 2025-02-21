@@ -1,0 +1,148 @@
+(async function() {
+    // Mengambil semua baris dari setiap tabel pada halaman
+    const rows = document.querySelectorAll("table tbody tr");
+    let index = 0;
+    let button = null;
+    let isProcessing = false;
+    let directoryHandle = null; // Handle folder unduhan
+
+    async function requestDownloadFolder() {
+        try {
+            directoryHandle = await window.showDirectoryPicker();
+            console.log("📁 Folder unduhan disetujui:", directoryHandle.name);
+        } catch (error) {
+            console.error("❌ Gagal mendapatkan akses folder unduhan.", error);
+            alert("⚠️ Anda harus memilih folder unduhan agar file bisa dihapus otomatis.");
+        }
+    }
+
+    async function downloadNext() {
+        if (index >= rows.length) {
+            console.log("✅ Semua file telah diproses.");
+            removeButton();
+            return;
+        }
+
+        if (isProcessing) {
+            console.log("⚠️ Sedang menunggu file sebelumnya diproses...");
+            return;
+        }
+
+        isProcessing = true;
+        const row = rows[index];
+
+        // Ekstraksi data dari baris:
+        // row.children[0] => Checkbox
+        // row.children[1] => Kolom tombol (di sini terdapat tombol download)
+        // row.children[2] => NPWP Penjual
+        // row.children[3] => Nama Penjual
+        // row.children[4] => Nomor Faktur Pajak
+        // row.children[5] => Tanggal Faktur Pajak
+        const namaPenjual = row.children[3]?.innerText.trim()
+            .replace(/[^a-zA-Z0-9\s]/g, "") // Hapus karakter spesial
+            .replace(/\s+/g, "_");           // Ganti spasi dengan underscore (_)
+        const nomorFaktur = row.children[4]?.innerText.trim().replace(/\s+/g, "");
+        const tanggalFaktur = row.children[5]?.innerText.trim().replace(/\s+/g, "");
+
+        // Format nama file: FPM_NAMA_PENJUAL_NOMOR_FAKTUR_TANGGAL.pdf
+        const fileName = `FPM_${namaPenjual}_${nomorFaktur}_${tanggalFaktur}.pdf`;
+
+        // Cari tombol download di dalam baris (dengan id "DownloadButton")
+        const downloadButton = row.querySelector("#DownloadButton");
+
+        if (downloadButton) {
+            console.log(`⬇️ Mengunduh file untuk: ${fileName}...`);
+            downloadButton.click();
+            showButton(fileName);
+        } else {
+            console.error(`❌ Gagal menemukan tombol download untuk ${fileName}`);
+            index++;
+            isProcessing = false;
+            downloadNext();
+        }
+    }
+
+    function showButton(fileName) {
+        removeButton();
+        button = document.createElement("button");
+        button.innerText = `Klik di sini untuk pilih & ganti nama file ke: ${fileName}`;
+        button.style.position = "fixed";
+        button.style.bottom = "20px";
+        button.style.left = "20px";
+        button.style.padding = "10px";
+        button.style.fontSize = "16px";
+        button.style.backgroundColor = "#28a745";
+        button.style.color = "white";
+        button.style.border = "none";
+        button.style.borderRadius = "5px";
+        button.style.cursor = "pointer";
+        button.style.zIndex = "10000";
+        button.onclick = async () => {
+            const success = await renameAndDeleteFile(fileName);
+            if (success) {
+                index++;
+                isProcessing = false;
+                downloadNext();
+            }
+        };
+
+        document.body.appendChild(button);
+    }
+
+    function removeButton() {
+        if (button) {
+            document.body.removeChild(button);
+            button = null;
+        }
+    }
+
+    async function renameAndDeleteFile(fileName) {
+        try {
+            console.log("📂 Silakan pilih file PDF yang baru saja diunduh...");
+
+            const [fileHandle] = await window.showOpenFilePicker({
+                types: [{ description: "PDF Files", accept: { "application/pdf": [".pdf"] } }]
+            });
+
+            if (!fileHandle) {
+                throw new Error("Tidak ada file yang dipilih.");
+            }
+
+            console.log("📂 File dipilih, sedang membaca file...");
+            const file = await fileHandle.getFile();
+            const blob = await file.arrayBuffer();
+
+            console.log(`🔄 Menyimpan ulang file sebagai: ${fileName}`);
+            const newHandle = await window.showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{ description: "PDF Files", accept: { "application/pdf": [".pdf"] } }]
+            });
+            const writable = await newHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+
+            console.log(`✅ Berhasil menyimpan: ${fileName}`);
+
+            // Jika folder unduhan telah disetujui, coba hapus file asli
+            if (directoryHandle) {
+                try {
+                    await directoryHandle.removeEntry(fileHandle.name);
+                    console.log(`🗑️ File asli (${fileHandle.name}) berhasil dihapus.`);
+                } catch (deleteError) {
+                    console.warn(`⚠️ Tidak bisa menghapus file asli (${fileHandle.name}). Silakan hapus manual.`);
+                }
+            } else {
+                alert(`❌ File asli (${fileHandle.name}) tidak bisa dihapus otomatis. Silakan hapus manual.`);
+            }
+
+            return true;
+        } catch (error) {
+            console.error(`❌ Gagal mengganti nama file: ${fileName}`, error);
+            alert("Gagal mengganti nama file. Pastikan Anda memilih file yang benar.");
+            return false;
+        }
+    }
+
+    await requestDownloadFolder();
+    downloadNext();
+})();
