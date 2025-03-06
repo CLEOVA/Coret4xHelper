@@ -3,7 +3,6 @@
     "name": "Download Masal Coretax",
     "version": "1.0",
     "description": "Ekstensi untuk mengunduh faktur & bukti potong secara massal.",
-    "permissions": ["scripting"],
     "host_permissions": [
       "https://coretaxdjp.pajak.go.id/e-invoice-portal/*",
       "https://coretaxdjp.pajak.go.id/withholding-slips-portal/*"
