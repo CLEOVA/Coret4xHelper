@@ -120,7 +120,7 @@
     // Fungsi untuk menunggu hingga baris dengan nomor faktur tertentu muncul kembali
     function waitForRow(nomorFaktur, timeout) {
         return new Promise((resolve, reject) => {
-            const interval = 500;
+            const interval = 1000;
             let elapsed = 0;
             const timer = setInterval(() => {
                 const row = findRowByFactur(nomorFaktur);
