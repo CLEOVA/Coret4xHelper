@@ -58,84 +58,108 @@
         console.log("✅ Tombol download berhasil ditambahkan!");
     }
 
+    // Fungsi utama download yang memanfaatkan data seleksi tersimpan
     function startDownloadProcess() {
         console.log("🔄 Memulai proses unduhan...");
 
-        const rows = document.querySelectorAll("table tbody tr");
-        let index = 0, failedDownloads = [], checkedRows = [];
-
-        if (!rows.length || (rows.length === 1 && rows[0].innerText.includes("Tidak ada data."))) {
-            showPopup("⚠️ Tidak ada data untuk diunduh.");
-            return;
-        }
-
-        rows.forEach(row => {
-            let checkbox = row.querySelector("input[type='checkbox']");
+        // Simpan dulu nomor faktur dari baris yang dipilih
+        const fakturNumbers = [];
+        document.querySelectorAll("table tbody tr").forEach(row => {
+            const checkbox = row.querySelector("input[type='checkbox']");
             if (checkbox && checkbox.checked) {
-                checkedRows.push(row);
+                const nomorFaktur = row.children[5]?.innerText.trim();
+                if (nomorFaktur) {
+                    fakturNumbers.push(nomorFaktur);
+                }
             }
         });
 
-        if (checkedRows.length === 0) {
+        if (fakturNumbers.length === 0) {
             showPopup("⚠️ Pilih faktur sebelum mengunduh.");
             return;
         }
 
-        console.log(`✅ ${checkedRows.length} faktur akan diunduh`);
+        console.log(`✅ ${fakturNumbers.length} faktur akan diunduh`);
+        let index = 0;
 
         function downloadNext() {
-            if (index >= checkedRows.length) {
+            if (index >= fakturNumbers.length) {
                 console.log("✅ Semua proses selesai.");
-                if (failedDownloads.length > 0) {
-                    showFailedPopup(failedDownloads);
-                } else {
-                    alert("✅ Semua faktur/potongan berhasil diunduh.");
-                }
+                alert("✅ Semua faktur/potongan berhasil diunduh.");
                 return;
             }
 
-            const row = checkedRows[index];
-            const namaPembeli = row.children[3]?.innerText.trim() || "Nama Tidak Diketahui";
-            const nomorFaktur = row.children[5]?.innerText.trim() || "Nomor Tidak Diketahui";
-            const tanggal = row.children[6]?.innerText.trim() || "Tanggal Tidak Diketahui";
-            const downloadButton = row.querySelector("#DownloadButton");
+            const nomorFaktur = fakturNumbers[index];
+            console.log(`🔍 Mencari baris untuk faktur: ${nomorFaktur}`);
 
-            if (downloadButton) {
-                console.log(`⬇️ Mengunduh: ${namaPembeli} - ${nomorFaktur} (${tanggal})`);
-                downloadButton.click();
-            } else {
-                console.warn(`❌ Gagal menemukan tombol download untuk: ${namaPembeli} - ${nomorFaktur} (${tanggal})`);
-                failedDownloads.push({ namaPembeli, nomorFaktur, tanggal });
-            }
+            // Tunggu hingga baris dengan nomor faktur tersebut muncul kembali (maks. 5 detik)
+            waitForRow(nomorFaktur, 5000)
+                .then(row => {
+                    const namaPembeli = row.children[3]?.innerText.trim() || "Nama Tidak Diketahui";
+                    const tanggal = row.children[6]?.innerText.trim() || "Tanggal Tidak Diketahui";
+                    const downloadButton = row.querySelector("#DownloadButton");
 
-            index++;
-            setTimeout(downloadNext, 2500);
+                    if (downloadButton) {
+                        console.log(`⬇️ Mengunduh: ${namaPembeli} - ${nomorFaktur} (${tanggal})`);
+                        downloadButton.click();
+                    } else {
+                        console.warn(`❌ Tidak menemukan tombol download untuk: ${namaPembeli} - ${nomorFaktur} (${tanggal})`);
+                    }
+                    index++;
+                    setTimeout(downloadNext, 2500);
+                })
+                .catch(error => {
+                    console.warn(`❌ Baris untuk faktur ${nomorFaktur} tidak ditemukan dalam waktu yang ditentukan.`);
+                    index++;
+                    setTimeout(downloadNext, 2500);
+                });
         }
-
-        function showFailedPopup(failedList) {
-            let errorList = failedList.map(f => `<li>${f.namaPembeli} - ${f.nomorFaktur} (${f.tanggal})</li>`).join("");
-            showPopup(`Beberapa faktur gagal diunduh:<ul>${errorList}</ul>`);
-        }
-
-        function showPopup(message) {
-            console.log("🔔 Menampilkan popup:", message);
-            let modal = document.createElement("div");
-            modal.innerHTML = `
-                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                    background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    z-index: 99999; text-align: center; width: 300px;">
-                    <p>${message}</p>
-                    <button id="close-popup" style="margin: 10px; padding: 8px 12px; cursor: pointer; background: red; color: white;">Tutup</button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-            document.getElementById("close-popup").addEventListener("click", () => modal.remove());
-        }
-
         downloadNext();
     }
 
-    function observeURLChanges() {
+    // Fungsi untuk menunggu hingga baris dengan nomor faktur tertentu muncul kembali
+    function waitForRow(nomorFaktur, timeout) {
+        return new Promise((resolve, reject) => {
+            const interval = 500;
+            let elapsed = 0;
+            const timer = setInterval(() => {
+                const row = findRowByFactur(nomorFaktur);
+                if (row) {
+                    clearInterval(timer);
+                    resolve(row);
+                }
+                elapsed += interval;
+                if (elapsed >= timeout) {
+                    clearInterval(timer);
+                    reject("Timeout");
+                }
+            }, interval);
+        });
+    }
+
+    function findRowByFactur(nomorFaktur) {
+        const rows = document.querySelectorAll("table tbody tr");
+        return Array.from(rows).find(row => row.children[5]?.innerText.trim() === nomorFaktur);
+    }
+
+    // Fungsi popup sederhana
+    function showPopup(message) {
+        console.log("🔔 Menampilkan popup:", message);
+        let modal = document.createElement("div");
+        modal.innerHTML = `
+            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                z-index: 99999; text-align: center; width: 300px;">
+                <p>${message}</p>
+                <button id="close-popup" style="margin: 10px; padding: 8px 12px; cursor: pointer; background: red; color: white;">Tutup</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        document.getElementById("close-popup").addEventListener("click", () => modal.remove());
+    }
+
+    // Memantau perubahan URL dan reload tabel
+    function observeChanges() {
         let lastURL = window.location.href;
         const observer = new MutationObserver(() => {
             if (window.location.href !== lastURL) {
@@ -144,10 +168,7 @@
                 createDownloadButton();
             }
         });
-
         observer.observe(document.body, { childList: true, subtree: true });
-
-        // Pengecekan setiap 1 detik untuk memastikan tombol tidak hilang
         setInterval(() => {
             if (isSupportedPage() && !document.getElementById("start-download-button")) {
                 console.log("🔄 Memeriksa tombol download...");
@@ -158,6 +179,5 @@
 
     console.log("✅ Menjalankan fungsi utama...");
     createDownloadButton();
-    observeURLChanges();
-
+    observeChanges();
 })();
