@@ -325,21 +325,42 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
 
     // Membuat tabel responsif untuk menampilkan detail dokumen yang gagal diunduh
     createFailedDocsTable(failedList) {
+      // Pisahkan key menjadi array data, jangan filter item kosong untuk menjaga struktur
       const dataRows = failedList.map(key =>
-        key.split("|").map(item => item.trim()).filter(item => item !== "")
+        key.split("|").map(item => item.trim())
       );
-      const maxCols = Math.max(...dataRows.map(arr => arr.length));
+
+      // Dapatkan sample row untuk mengetahui jumlah kolom sebenarnya
+      const sampleRow = document.querySelector("table.p-datatable-table tbody tr");
+      const colCount = sampleRow ? sampleRow.cells.length : 0;
+
+      // Ambil header asli dari tabel utama, termasuk header kosong agar strukturnya sama
+      let headers = [];
+      const originalHeader = document.querySelector("table.p-datatable-table thead tr");
+      if (originalHeader) {
+        headers = Array.from(originalHeader.children).map(th => th.innerText.trim());
+      }
+
+      // Tentukan jumlah kolom maksimum berdasarkan data, header, atau sample row count
+      const maxCols = Math.max(
+        ...dataRows.map(arr => arr.length),
+        headers.length,
+        colCount
+      );
+
       const table = document.createElement("table");
       Object.assign(table.style, {
         width: "100%",
         borderCollapse: "collapse",
         marginTop: "15px"
       });
+
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
       for (let i = 0; i < maxCols; i++) {
         const th = document.createElement("th");
-        th.textContent = `Field ${i + 1}`;
+        // Gunakan label header asli jika ada, walaupun kosong
+        th.textContent = headers[i] !== undefined ? headers[i] : "";
         Object.assign(th.style, {
           border: "1px solid #ddd",
           padding: "8px",
@@ -350,12 +371,14 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
       }
       thead.appendChild(headerRow);
       table.appendChild(thead);
+
+      // Buat tbody dengan data error, lengkapi sel kosong agar strukturnya sama
       const tbody = document.createElement("tbody");
       dataRows.forEach(rowData => {
         const tr = document.createElement("tr");
         for (let i = 0; i < maxCols; i++) {
           const td = document.createElement("td");
-          td.textContent = rowData[i] || "";
+          td.textContent = rowData[i] !== undefined ? rowData[i] : "";
           Object.assign(td.style, {
             border: "1px solid #ddd",
             padding: "8px"
@@ -365,6 +388,7 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
+
       const responsiveDiv = document.createElement("div");
       Object.assign(responsiveDiv.style, {
         overflowX: "auto",
