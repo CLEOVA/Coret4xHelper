@@ -14,7 +14,6 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         console.error("[DocDownloader] Error during initialization:", error);
       }
     }
-
     // Inisialisasi listener untuk pesan dari background script
     initMessageListener() {
       chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
