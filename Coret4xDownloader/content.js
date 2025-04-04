@@ -61,19 +61,26 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
       }
     }
 
-    // Membuat tombol download dan overlay instruksi yang dipersonalisasi sesuai halaman
+    // Membuat tombol download dengan container dan tombol close di pojok kanan atas
     createDownloadControl() {
       try {
-        if (document.getElementById("doc-download-btn")) return;
+        if (document.getElementById("doc-download-wrapper")) return;
 
-        // Buat tombol download dengan styling modern
+        // Buat container untuk tombol download dan tombol close
+        const wrapper = document.createElement("div");
+        wrapper.id = "doc-download-wrapper";
+        Object.assign(wrapper.style, {
+          position: "fixed",
+          bottom: "20px",
+          left: "20px",
+          zIndex: "10000",
+        });
+
+        // Buat tombol download
         const btn = document.createElement("button");
         btn.id = "doc-download-btn";
         btn.textContent = "Download Dokumen";
         Object.assign(btn.style, {
-          position: "fixed",
-          bottom: "20px",
-          left: "20px",
           padding: "12px 18px",
           fontSize: "16px",
           backgroundColor: "#28a745",
@@ -81,59 +88,46 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
           border: "none",
           borderRadius: "5px",
           cursor: "pointer",
-          zIndex: "10000"
         });
         btn.addEventListener("click", () => this.beginDownload());
-        document.body.appendChild(btn);
+        wrapper.appendChild(btn);
+
+        // Buat tombol close (ikon x) di pojok kanan atas container
+        const closeIcon = document.createElement("span");
+        closeIcon.innerHTML = "&times;"; // simbol 'x'
+        Object.assign(closeIcon.style, {
+          position: "absolute",
+          top: "-10px",
+          right: "-10px",
+          backgroundColor: "#dc3545",
+          color: "white",
+          borderRadius: "50%",
+          width: "20px",
+          height: "20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "14px",
+          cursor: "pointer",
+          lineHeight: "20px",
+        });
+        closeIcon.addEventListener("click", () => {
+          wrapper.style.display = "none";
+          console.info("[DocDownloader] Download button hidden.");
+        });
+        wrapper.appendChild(closeIcon);
+
+        document.body.appendChild(wrapper);
         console.info("[DocDownloader] Download button added.");
 
-        // Personalisasikan instruksi sesuai halaman aktif
-        const currentUrl = window.location.href;
-        let instructions = "";
-        if (currentUrl.includes("returnsheets-portal")) {
-          instructions = "Di halaman Returnsheets, tidak ada opsi untuk memilih baris. " +
-            "Semua dokumen yang terdaftar akan diunduh. Pastikan data sudah benar, lalu klik tombol 'Download Dokumen' untuk memulai unduhan.";
-        } else if (currentUrl.includes("e-invoice-portal")) {
-          instructions = "Di halaman e-Faktur, silahkan centang baris yang ingin Anda unduh, " +
-            "kemudian klik tombol 'Download Dokumen'. Baris yang gagal akan ditandai dengan warna merah.";
-        } else if (currentUrl.includes("withholding-slips-portal")) {
-          instructions = "Di halaman Bukti Potong, centang dokumen yang ingin Anda unduh, " +
-            "lalu klik tombol 'Download Dokumen'. Baris yang tidak berhasil diunduh akan ditandai dengan warna merah.";
-        } else {
-          instructions = "Silahkan pilih baris yang ingin diunduh (jika tersedia), " +
-            "kemudian klik tombol 'Download Dokumen'. Baris yang gagal akan ditandai dengan warna merah.";
-        }
-        instructions += "\n\nCatatan: Unduhan dilakukan secara lokal tanpa mengirim data ke server.";
-
-        const extraButtons = [
-          {
-            text: "Lanjutkan Download",
-            style: { backgroundColor: "#28a745" },
-            handler: overlay => {
-              console.info("[DocDownloader] User chose to proceed with download.");
-              document.body.removeChild(overlay);
-            }
-          },
-          {
-            text: "Batal Download",
-            style: { backgroundColor: "#dc3545" },
-            handler: overlay => {
-              console.info("[DocDownloader] User cancelled download. Hiding download button.");
-              const downloadBtn = document.getElementById("doc-download-btn");
-              if (downloadBtn) {
-                downloadBtn.style.display = "none";
-              }
-              document.body.removeChild(overlay);
-            }
-          }
-        ];
-        this.showModal(instructions, "Instruksi Penggunaan", extraButtons);
+        // Bagian instruksi overlay dihapus agar tidak muncul saat halaman dimuat.
+        // Jika di kemudian hari diperlukan instruksi, Anda dapat menambahkan kembali pemanggilan this.showModal() di sini.
       } catch (error) {
         console.error("[DocDownloader] Error creating download control:", error);
       }
     }
 
-    // Menampilkan modal overlay dengan pesan dan tombol aksi
+    // Menampilkan modal overlay dengan pesan dan tombol aksi (tetap tersedia untuk pemanggilan manual jika diperlukan)
     showModal(message, title = "Informasi", extraButtons = []) {
       try {
         const overlay = document.createElement("div");
@@ -233,7 +227,7 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
           }
           elapsed += interval;
           if (elapsed >= timeout) {
-            console.error(`[DocDownloader] Timeout after ${timeout}ms: Row with key "${key}" not found.`);
+            console.error(`[DocDownloader] Timeout after ${timeout}ms: Row dengan key "${key}" tidak ditemukan.`);
             clearInterval(timer);
             reject(new Error("Timeout: Row not found"));
           }
@@ -325,41 +319,31 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
 
     // Membuat tabel responsif untuk menampilkan detail dokumen yang gagal diunduh
     createFailedDocsTable(failedList) {
-      // Pisahkan key menjadi array data, jangan filter item kosong untuk menjaga struktur
       const dataRows = failedList.map(key =>
         key.split("|").map(item => item.trim())
       );
-
-      // Dapatkan sample row untuk mengetahui jumlah kolom sebenarnya
       const sampleRow = document.querySelector("table.p-datatable-table tbody tr");
       const colCount = sampleRow ? sampleRow.cells.length : 0;
-
-      // Ambil header asli dari tabel utama, termasuk header kosong agar strukturnya sama
       let headers = [];
       const originalHeader = document.querySelector("table.p-datatable-table thead tr");
       if (originalHeader) {
         headers = Array.from(originalHeader.children).map(th => th.innerText.trim());
       }
-
-      // Tentukan jumlah kolom maksimum berdasarkan data, header, atau sample row count
       const maxCols = Math.max(
         ...dataRows.map(arr => arr.length),
         headers.length,
         colCount
       );
-
       const table = document.createElement("table");
       Object.assign(table.style, {
         width: "100%",
         borderCollapse: "collapse",
         marginTop: "15px"
       });
-
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
       for (let i = 0; i < maxCols; i++) {
         const th = document.createElement("th");
-        // Gunakan label header asli jika ada, walaupun kosong
         th.textContent = headers[i] !== undefined ? headers[i] : "";
         Object.assign(th.style, {
           border: "1px solid #ddd",
@@ -371,8 +355,6 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
       }
       thead.appendChild(headerRow);
       table.appendChild(thead);
-
-      // Buat tbody dengan data error, lengkapi sel kosong agar strukturnya sama
       const tbody = document.createElement("tbody");
       dataRows.forEach(rowData => {
         const tr = document.createElement("tr");
@@ -388,7 +370,6 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
-
       const responsiveDiv = document.createElement("div");
       Object.assign(responsiveDiv.style, {
         overflowX: "auto",
@@ -465,7 +446,7 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
                 this.highlightRow(rowEl);
                 failedDocs.push(currentDocKey);
                 idx++;
-                return setTimeout(processNext, 2500);
+                return setTimeout(processNext, 3000);
               }
             } else {
               console.debug("[DocDownloader] No download URL found; proceeding with button click.");
