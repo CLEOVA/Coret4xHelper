@@ -9,22 +9,34 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
       try {
         this.initMessageListener();
         this.createDownloadControl();
-        console.info("[DocDownloader] Initialization complete.");
       } catch (error) {
         console.error("[DocDownloader] Error during initialization:", error);
       }
     }
-    // Inisialisasi listener untuk pesan dari background script
-    initMessageListener() {
-      chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-        if (msg?.action === "startDownloadDocuments") {
-          console.info("[DocDownloader] Received command: startDownloadDocuments.");
-          this.logFirstRowCells();
-          this.beginDownload();
-          sendResponse({ status: "Download process initiated" });
-        }
-      });
+
+// Inisialisasi listener untuk pesan dari background script
+initMessageListener() {
+  chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
+    try {
+      // Opsional: Pastikan pesan berasal dari extension kamu sendiri
+      if (sender && sender.id !== chrome.runtime.id) {
+        return;
+      }
+
+      if (msg?.action === "startDownloadDocuments") {
+        // Misalnya, jika beginDownload() mengembalikan Promise
+        await this.beginDownload();
+        sendResponse({ status: "Download process initiated" });
+      }
+    } catch (error) {
+      console.error("[DocDownloader] Error in message listener:", error);
+      sendResponse({ status: "Error", error: error.toString() });
     }
+    // Return true untuk mengindikasikan respon secara asynchronous
+    return true;
+  });
+}
+
 
     // Menghasilkan key unik untuk setiap baris berdasarkan teks dari sel-selnya
     createUniqueKey(row) {
@@ -32,40 +44,17 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         const key = Array.from(row.cells)
           .map(cell => cell.innerText.trim().replace(/\s+/g, " "))
           .join(" | ");
-        console.debug(`[DocDownloader] Generated key for row: ${key}`);
         return key;
       } catch (error) {
         console.error("[DocDownloader] Error generating key for row:", error);
         return "";
       }
     }
-
-    // Mencatat isi beberapa sel dari baris pertama (untuk debugging)
-    logFirstRowCells() {
-      try {
-        const rows = document.querySelectorAll("table tbody tr");
-        console.info(`[DocDownloader] Total rows in table: ${rows.length}`);
-        if (!rows.length) {
-          console.warn("[DocDownloader] No rows found in the table.");
-          return;
-        }
-        const sample = rows[0];
-        console.info("[DocDownloader] Contents of the first row:");
-        const maxCells = Math.min(10, sample.children.length);
-        for (let i = 0; i < maxCells; i++) {
-          console.info(`  Cell[${i}]: ${sample.children[i].innerText.trim()}`);
-        }
-      } catch (error) {
-        console.error("[DocDownloader] Error logging first row cells:", error);
-      }
-    }
-
     // Membuat tombol download dengan container dan tombol close di pojok kanan atas
     createDownloadControl() {
       try {
         if (document.getElementById("doc-download-wrapper")) return;
 
-        // Buat container untuk tombol download dan tombol close
         const wrapper = document.createElement("div");
         wrapper.id = "doc-download-wrapper";
         Object.assign(wrapper.style, {
@@ -75,7 +64,6 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
           zIndex: "10000",
         });
 
-        // Buat tombol download
         const btn = document.createElement("button");
         btn.id = "doc-download-btn";
         btn.textContent = "Download Dokumen";
@@ -91,9 +79,8 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         btn.addEventListener("click", () => this.beginDownload());
         wrapper.appendChild(btn);
 
-        // Buat tombol close (ikon x) di pojok kanan atas container
         const closeIcon = document.createElement("span");
-        closeIcon.innerHTML = "&times;"; // simbol 'x'
+        closeIcon.innerHTML = "&times;";
         Object.assign(closeIcon.style, {
           position: "absolute",
           top: "-10px",
@@ -112,21 +99,16 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         });
         closeIcon.addEventListener("click", () => {
           wrapper.style.display = "none";
-          console.info("[DocDownloader] Download button hidden.");
         });
         wrapper.appendChild(closeIcon);
 
         document.body.appendChild(wrapper);
-        console.info("[DocDownloader] Download button added.");
-
-        // Bagian instruksi overlay dihapus agar tidak muncul saat halaman dimuat.
-        // Jika di kemudian hari diperlukan instruksi, Anda dapat menambahkan kembali pemanggilan this.showModal() di sini.
       } catch (error) {
         console.error("[DocDownloader] Error creating download control:", error);
       }
     }
 
-    // Menampilkan modal overlay dengan pesan dan tombol aksi (tetap tersedia untuk pemanggilan manual jika diperlukan)
+    // Menampilkan modal overlay dengan pesan dan tombol aksi
     showModal(message, title = "Informasi", extraButtons = []) {
       try {
         const overlay = document.createElement("div");
@@ -176,7 +158,6 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
             backgroundColor: btnData.style?.backgroundColor || "#28a745"
           });
           extraBtn.addEventListener("click", () => {
-            console.info(`[DocDownloader] Extra button '${btnData.text}' clicked.`);
             btnData.handler(overlay);
           });
           modal.appendChild(extraBtn);
@@ -191,64 +172,58 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
 
     // Memeriksa status URL download menggunakan fetch HEAD (jika URL tersedia)
     async checkDownload(url) {
-      console.info(`[DocDownloader] Verifying download URL: ${url}`);
       try {
         const response = await fetch(url, {
           method: "HEAD",
           credentials: "include",
           cache: "no-cache"
         });
-        if (response.ok) {
-          console.info(`[DocDownloader] URL verified successfully (status: ${response.status}).`);
-          return true;
-        } else {
-          console.warn(`[DocDownloader] URL check returned status ${response.status}.`);
-          return false;
-        }
+        return response.ok;
       } catch (error) {
         console.error(`[DocDownloader] Error verifying URL ${url}:`, error);
         return false;
       }
     }
 
-    // Menunggu hingga baris dengan key tertentu muncul (untuk mendukung konten dinamis)
-    waitForRow(key, timeout) {
-      return new Promise((resolve, reject) => {
-        console.info(`[DocDownloader] Waiting for row with key: ${key}`);
-        const interval = 1000;
-        let elapsed = 0;
-        const timer = setInterval(() => {
-          const found = this.findRowByKey(key);
-          if (found) {
-            console.info(`[DocDownloader] Row found for key: ${key}`);
-            clearInterval(timer);
-            resolve(found);
-          }
-          elapsed += interval;
-          if (elapsed >= timeout) {
-            console.error(`[DocDownloader] Timeout after ${timeout}ms: Row dengan key "${key}" tidak ditemukan.`);
-            clearInterval(timer);
-            reject(new Error("Timeout: Row not found"));
-          }
-        }, interval);
-      });
+// Menunggu hingga baris dengan key tertentu muncul menggunakan MutationObserver
+waitForRow(key, timeout) {
+  return new Promise((resolve, reject) => {
+    // Cek awal apakah row sudah ada
+    const found = this.findRowByKey(key);
+    if (found) {
+      return resolve(found);
     }
+
+    const observer = new MutationObserver((mutations, obs) => {
+      const found = this.findRowByKey(key);
+      if (found) {
+        obs.disconnect();
+        resolve(found);
+      }
+    });
+
+    // Mengamati perubahan di seluruh document body
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Timeout jika elemen tidak ditemukan dalam waktu yang ditentukan
+    setTimeout(() => {
+      observer.disconnect();
+      console.error(`[DocDownloader] Timeout after ${timeout}ms: Row dengan key "${key}" tidak ditemukan.`);
+      reject(new Error("Timeout: Row not found"));
+    }, timeout);
+  });
+}
 
     // Mencari baris berdasarkan key unik
     findRowByKey(key) {
       const rows = document.querySelectorAll("table.p-datatable-table tbody tr");
-      const foundRow = Array.from(rows).find(row => this.createUniqueKey(row) === key);
-      if (!foundRow) {
-        console.debug(`[DocDownloader] No row found with key: ${key}`);
-      }
-      return foundRow;
+      return Array.from(rows).find(row => this.createUniqueKey(row) === key);
     }
 
     // Tandai baris dengan border merah bila terjadi error
     highlightRow(row) {
       if (row) {
         row.style.border = "2px solid red";
-        console.info(`[DocDownloader] Marked row as failed: ${this.createUniqueKey(row)}`);
       }
     }
 
@@ -307,13 +282,11 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
         cursor: "pointer"
       });
       closeBtn.addEventListener("click", () => {
-        console.info("[DocDownloader] Closing download summary.");
         document.body.removeChild(overlay);
       });
       modal.appendChild(closeBtn);
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
-      console.info(`[DocDownloader] Download summary: ${successCount} succeeded, ${failedList.length} failed.`);
     }
 
     // Membuat tabel responsif untuk menampilkan detail dokumen yang gagal diunduh
@@ -379,31 +352,26 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
       return responsiveDiv;
     }
 
-    // Fungsi utama: Kumpulkan baris yang dipilih (atau semua baris di Returnsheets) dan proses unduhan.
+    // Fungsi utama: Kumpulkan baris yang dipilih dan proses unduhan.
     async beginDownload() {
-      console.info("[DocDownloader] Starting document download process...");
       const docSet = new Set();
       const isReturnsheets = window.location.href.includes("returnsheets-portal");
       const rows = document.querySelectorAll("table.p-datatable-table tbody tr");
-      console.info(`[DocDownloader] Found ${rows.length} rows in the table.`);
       
       rows.forEach(row => {
         const chk = row.querySelector("input[type='checkbox']");
         if (chk) {
-          console.debug("[DocDownloader] Checkbox detected. Checked:", chk.checked);
           if (chk.checked) {
             const key = this.createUniqueKey(row);
             if (key) docSet.add(key);
           }
         } else if (isReturnsheets) {
-          console.debug("[DocDownloader] No checkbox found; assuming row is selected (Returnsheets Portal).");
           const key = this.createUniqueKey(row);
           if (key) docSet.add(key);
         }
       });
       
       const docList = Array.from(docSet);
-      console.info(`[DocDownloader] Total unique documents to process: ${docList.length}`);
       if (!docList.length) {
         this.showModal("Harap pilih data terlebih dahulu sebelum mengunduh.", "Peringatan", [
           {
@@ -420,12 +388,10 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
       let idx = 0;
       const processNext = async () => {
         if (idx >= docList.length) {
-          console.info("[DocDownloader] Download process complete.");
           this.showSummary(successCount, failedDocs);
           return;
         }
         const currentDocKey = docList[idx];
-        console.info(`[DocDownloader] Processing document ${idx + 1}: ${currentDocKey}`);
         try {
           const rowEl = await this.waitForRow(currentDocKey, 5000);
           const buyer = rowEl.children[3] ? rowEl.children[3].innerText.trim() : "Unknown Buyer";
@@ -441,20 +407,15 @@ if (!window[Symbol.for("__docDownloaderInjected")]) {
             if (downloadUrl) {
               const valid = await this.checkDownload(downloadUrl);
               if (!valid) {
-                console.warn(`[DocDownloader] Download URL check failed for: ${downloadUrl}`);
                 this.highlightRow(rowEl);
                 failedDocs.push(currentDocKey);
                 idx++;
                 return setTimeout(processNext, 3000);
               }
-            } else {
-              console.debug("[DocDownloader] No download URL found; proceeding with button click.");
             }
-            console.info(`[DocDownloader] Initiating download for: ${buyer} - ${currentDocKey} (${date})`);
             btnDownload.click();
             successCount++;
           } else {
-            console.warn(`[DocDownloader] Download button not found for: ${currentDocKey}`);
             this.highlightRow(rowEl);
             failedDocs.push(currentDocKey);
           }
