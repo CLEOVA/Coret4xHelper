@@ -18,14 +18,11 @@ Ekstensi ini memungkinkan Anda untuk mengunduh **Faktur Pajak Masukan**, **Faktu
 
 ## Keunggulan Utama
 
-- **Seleksi Dokumen Cerdas:**  
+- **Seleksi Dokumen Lebih baik:**  
   Pilih dokumen yang ingin diunduh secara spesifik untuk menghindari duplikasi unduhan.
 
 - **Kemudahan Penggunaan:**  
   Tidak perlu instalasi manual tambahan—cukup klik tombol unduh yang telah disediakan.
-
-- **Popup Instruksi & Notifikasi:**  
-  Tampilan popup yang dipersonalisasi sesuai dengan halaman aktif (eFaktur, eBupot, atau Returnsheets) memberikan instruksi langkah demi langkah. Selain itu, popup notifikasi akan menampilkan jumlah dokumen yang berhasil diunduh serta yang gagal, lengkap dengan tabel detail untuk memudahkan pengecekan.
 
 - **Tombol Unduh Melayang:**  
   Tombol unduh dapat disembunyikan jika Anda tidak sedang melakukan unduhan massal, sehingga tampilan halaman tetap rapi.
@@ -33,6 +30,9 @@ Ekstensi ini memungkinkan Anda untuk mengunduh **Faktur Pajak Masukan**, **Faktu
 - **Penandaan Kesalahan Otomatis:**  
   Baris yang tidak memiliki tombol unduh PDF akan otomatis diberi border merah sebagai indikator adanya masalah.
 
+- **PRingkasan Unduh:**  
+  Menunjukan jumlah berhasil unduh dan jumlah gagal unduh. Gagal unduh didasarkan pada ada tidaknya tombol PDF. Jika tombol PDF tidak ada, maka akan muncul tabel berisi daftar baris yang tidak memiliki tombol PDF.
+  
 ## Catatan Penting
 
 Karena keterbatasan dalam menangkap status HTTP, ekstensi ini tidak dapat mendeteksi error seperti 403, 404, 302, atau error lainnya jika sistem Coretax mengalami gangguan. Oleh karena itu, disarankan untuk menggunakan ekstensi ini saat Coretax beroperasi dengan stabil.
